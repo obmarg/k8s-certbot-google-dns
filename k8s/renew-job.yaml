@@ -1,0 +1,52 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: certbot-renew
+  namespace: certbot
+spec:
+  schedule: "@daily"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          volumes:
+            - name: certbot-pv-storage
+              persistentVolumeClaim:
+                claimName: certbot-pv-claim
+            - name: google-creds
+              secret:
+                secretName: google-creds
+          containers:
+          - name: certbot
+            image: obmarg/k8s-certbot-google-dns
+            imagePullPolicy: Always
+            args:
+              - renew
+              - -n
+              - --dns-google
+              - --dns-google-credentials
+              - /etc/google-dns/creds.json
+              - --deploy-hook
+              - cert-deploy.sh
+            env:
+              - name: CERT_NAMESPACE
+                value: <NAMESPACE>
+              - name: CERT_SECRET
+                value: ingress-cert
+              - name: DOMAIN
+                value: <A_DOMAIN>
+              - name: INGRESS_NAME
+                value: <YOUR_INGRESS>
+            volumeMounts:
+              - mountPath: /etc/letsencrypt
+                name: certbot-pv-storage
+                subPath: etc
+              - mountPath: /var/lib/letsencrypt
+                name: certbot-pv-storage
+                subPath: var
+              - mountPath: /etc/google-dns
+                name: google-creds
+                readOnly: true
+          restartPolicy: OnFailure
+          serviceAccountName: certbot
+          automountServiceAccountToken: true
